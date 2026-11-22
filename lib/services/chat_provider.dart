@@ -49,9 +49,23 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 2. Fetch answer from CRAG backend API / Fallbacks
+      // Build conversation history (up to last 6 messages) for multi-turn context
+      final prevMessages = _messages
+          .where((m) => m != userMessage && m.content.isNotEmpty)
+          .toList();
+      final recentHistory = (prevMessages.length > 6
+              ? prevMessages.sublist(prevMessages.length - 6)
+              : prevMessages)
+          .map((m) => {
+                'role': m.isUser ? 'user' : 'assistant',
+                'content': m.content,
+              })
+          .toList();
+
+      // 2. Fetch answer from CRAG backend API with conversation context
       final result = await _apiService.sendQuery(
         query: text,
+        history: recentHistory,
         courseId: courseId,
         docType: docType,
       );

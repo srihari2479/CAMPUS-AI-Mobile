@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 
 class EventItem {
@@ -43,6 +44,8 @@ class EventsScreen extends StatefulWidget {
 }
 
 class _EventsScreenState extends State<EventsScreen> {
+  static const String _localEventsKey = 'cached_campus_events_json';
+
   List<EventItem> _events = [];
   bool _loading = true;
   String? _error;
@@ -50,14 +53,37 @@ class _EventsScreenState extends State<EventsScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchEvents();
+    _loadLocalAndFetch();
   }
 
-  Future<void> _fetchEvents() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  /// Instant Fetch from local storage on demand + silent background refresh
+  Future<void> _loadLocalAndFetch() async {
+    // 1. Instant local read (< 5ms)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedJson = prefs.getString(_localEventsKey);
+      if (cachedJson != null && cachedJson.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(cachedJson);
+        if (mounted && list.isNotEmpty) {
+          setState(() {
+            _events = list.map((e) => EventItem.fromJson(e as Map<String, dynamic>)).toList();
+            _loading = false;
+          });
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fetch fresh events in background (or foreground if cache was empty)
+    await _fetchEvents(isBackgroundSync: _events.isNotEmpty);
+  }
+
+  Future<void> _fetchEvents({bool isBackgroundSync = false}) async {
+    if (!isBackgroundSync) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
 
     try {
       final List<dynamic> data = await ApiService.fetchEvents();
@@ -65,12 +91,19 @@ class _EventsScreenState extends State<EventsScreen> {
         setState(() {
           _events = data.map((e) => EventItem.fromJson(e as Map<String, dynamic>)).toList();
           _loading = false;
+          _error = null;
         });
+
+        // Persist locally for instant on-demand retrieval next time
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_localEventsKey, jsonEncode(data));
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Could not load campus events. Please check your network connection.';
+          if (_events.isEmpty) {
+            _error = 'Could not load campus events. Please check your network connection.';
+          }
           _loading = false;
         });
       }
@@ -441,6 +474,7 @@ class _EventsScreenState extends State<EventsScreen> {
           width: double.infinity,
           height: height,
           fit: BoxFit.cover,
+          gaplessPlayback: true,
         );
       } catch (_) {
         return Container(height: height, color: const Color(0xFF121212));
@@ -451,6 +485,33 @@ class _EventsScreenState extends State<EventsScreen> {
         width: double.infinity,
         height: height,
         fit: BoxFit.cover,
+        gaplessPlayback: true,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: height,
+            color: const Color(0xFF161616),
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            height: height,
+            color: const Color(0xFF161616),
+            child: const Center(
+              child: Icon(Icons.broken_image_rounded, color: Color(0xFF475569), size: 28),
+            ),
+          );
+        },
       );
     }
   }
@@ -496,7 +557,7 @@ class _EventsScreenState extends State<EventsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -550,18 +611,30 @@ class _EventsScreenState extends State<EventsScreen> {
               ],
               const SizedBox(height: 16),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(Icons.calendar_today_rounded, size: 16, color: color),
                   const SizedBox(width: 8),
-                  Text(_formatDate(event.eventDate), style: const TextStyle(fontSize: 13, color: Colors.white)),
+                  Expanded(
+                    child: Text(
+                      _formatDate(event.eventDate),
+                      style: const TextStyle(fontSize: 13, color: Colors.white),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(Icons.location_on_rounded, size: 16, color: color),
                   const SizedBox(width: 8),
-                  Text(event.venue, style: const TextStyle(fontSize: 13, color: Colors.white)),
+                  Expanded(
+                    child: Text(
+                      event.venue,
+                      style: const TextStyle(fontSize: 13, color: Colors.white),
+                    ),
+                  ),
                 ],
               ),
             ],

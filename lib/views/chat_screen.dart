@@ -563,156 +563,167 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  String _formatMarkdownForDisplay(String raw) {
+    if (raw.isEmpty) return raw;
+    var text = raw;
+    // Replace standalone unicode bullets with standard markdown list bullets
+    text = text.replaceAll(RegExp(r'(?<!\n)[•·●]\s*'), '\n\n- ');
+    text = text.replaceAll(RegExp(r'\n[•·●]\s*'), '\n- ');
+    // Ensure clean separation around headers
+    text = text.replaceAll(RegExp(r'(?<!\n)###\s*'), '\n\n### ');
+    // Clean up excessive newlines
+    text = text.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    return text.trim();
+  }
+
   /* ── 4. ChatGPT Style Message Bubble ── */
   Widget _buildChatGPTBubble(ChatMessage message) {
     final isUser = message.isUser;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: [
-          if (!isUser) ...[
+    if (isUser) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
             Container(
-              width: 32,
-              height: 32,
-              margin: const EdgeInsets.only(right: 10, top: 4),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.82,
               ),
-              child: const Center(
-                child: Icon(Icons.auto_awesome, color: Color(0xFF10B981), size: 16),
-              ),
-            ),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isUser ? const Color(0xFF262626) : const Color(0xFF121212),
-                borderRadius: BorderRadius.circular(18),
+                color: const Color(0xFF262626),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(18),
+                  topRight: Radius.circular(18),
+                  bottomLeft: Radius.circular(18),
+                  bottomRight: Radius.circular(4),
+                ),
                 border: Border.all(
-                  color: isUser ? Colors.transparent : Colors.white.withValues(alpha: 0.08),
+                  color: Colors.white.withValues(alpha: 0.06),
                   width: 1,
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (isUser)
-                    Text(
-                      message.content,
-                      style: const TextStyle(
-                        fontSize: 14.5,
-                        color: Colors.white,
-                        height: 1.45,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    )
-                  else
-                    MarkdownBody(
-                      data: message.content,
-                      onTapLink: (text, href, title) {
-                        if (href != null) _launchURL(href);
-                      },
-                      styleSheet: MarkdownStyleSheet(
-                        p: const TextStyle(fontSize: 14.5, color: Color(0xFFECECF1), height: 1.55),
-                        h1: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                        h2: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
-                        h3: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
-                        code: const TextStyle(
-                          backgroundColor: Color(0xFF000000),
-                          color: Color(0xFF10B981),
-                          fontFamily: 'monospace',
-                          fontSize: 13,
-                        ),
-                        codeblockDecoration: BoxDecoration(
-                          color: const Color(0xFF000000),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white12),
-                        ),
-                      ),
-                    ),
+              child: Text(
+                message.content,
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  color: Colors.white,
+                  height: 1.45,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
-                  // Image Poster Banner if returned by RAG
-                  if (message.imageUrl != null && message.imageUrl!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: GestureDetector(
-                        onTap: () => _showFullImage(context, message.imageUrl!),
-                        child: Stack(
+    // AI Assistant Message: True ChatGPT Edge-to-Edge layout (Full width, no left icon)
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          MarkdownBody(
+            data: _formatMarkdownForDisplay(message.content),
+            selectable: true,
+            softLineBreak: true,
+            onTapLink: (text, href, title) {
+              if (href != null) _launchURL(href);
+            },
+            styleSheet: MarkdownStyleSheet(
+              p: const TextStyle(fontSize: 15.5, color: Color(0xFFECECF1), height: 1.6),
+              h1: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+              h2: const TextStyle(fontSize: 17.5, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
+              h3: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+              listBullet: const TextStyle(fontSize: 15.5, color: Color(0xFF10B981), fontWeight: FontWeight.bold),
+              listIndent: 20.0,
+              blockSpacing: 12.0,
+              strong: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+              em: const TextStyle(fontStyle: FontStyle.italic, color: Color(0xFFCBD5E1)),
+              code: const TextStyle(
+                backgroundColor: Color(0xFF1E1E1E),
+                color: Color(0xFF10B981),
+                fontFamily: 'monospace',
+                fontSize: 13,
+              ),
+              codeblockDecoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white12),
+              ),
+            ),
+          ),
+
+          // Image Poster Banner if returned by RAG
+          if (message.imageUrl != null && message.imageUrl!.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: GestureDetector(
+                onTap: () => _showFullImage(context, message.imageUrl!),
+                child: Stack(
+                  children: [
+                    _buildEventImage(message.imageUrl!, height: 200),
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.75),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Row(
                           children: [
-                            _buildEventImage(message.imageUrl!, height: 180),
-                            Positioned(
-                              bottom: 8,
-                              right: 8,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.75),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.zoom_in, size: 12, color: Color(0xFF10B981)),
-                                    SizedBox(width: 4),
-                                    Text('Tap to zoom', style: TextStyle(fontSize: 10, color: Colors.white)),
-                                  ],
-                                ),
-                              ),
-                            ),
+                            Icon(Icons.zoom_in, size: 12, color: Color(0xFF10B981)),
+                            SizedBox(width: 4),
+                            Text('Tap to zoom', style: TextStyle(fontSize: 10, color: Colors.white)),
                           ],
                         ),
                       ),
                     ),
                   ],
-
-                  // Citations / Sources Chips
-                  if (!isUser && message.citations.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    const Divider(color: Colors.white12, height: 1),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: message.citations.map((source) {
-                        return Container(
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.68,
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3), width: 0.8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.description_outlined, size: 11, color: Color(0xFF10B981)),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
-                                  source,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 10, color: Color(0xFF10B981), fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
-          ),
+          ],
+
+          // Citations / Sources Chips
+          if (message.citations.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: message.citations.map((source) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3), width: 0.8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.description_outlined, size: 11, color: Color(0xFF10B981)),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          source,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 10.5, color: Color(0xFF10B981), fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
         ],
       ),
     );
@@ -856,30 +867,21 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
 
-                    // Mic Icon
-                    IconButton(
-                      icon: const Icon(Icons.mic_none_rounded, color: Colors.white, size: 22),
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Voice input active'), duration: Duration(seconds: 1)),
-                        );
-                      },
-                    ),
-
-                    // Green ChatGPT Circular Voice Waveform / Send Button
-                    GestureDetector(
-                      onTap: () => _sendMessage(provider),
-                      child: Container(
-                        margin: const EdgeInsets.only(right: 6),
-                        width: 38,
-                        height: 38,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF10B981), // ChatGPT Green #10B981
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Center(
-                          child: Icon(Icons.graphic_eq_rounded, color: Colors.black, size: 20),
+                    // Send Button (Arrow up)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 7),
+                      child: GestureDetector(
+                        onTap: () => _sendMessage(provider),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF10B981), // ChatGPT Green #10B981
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Icon(Icons.arrow_upward_rounded, color: Colors.black, size: 22),
+                          ),
                         ),
                       ),
                     ),
